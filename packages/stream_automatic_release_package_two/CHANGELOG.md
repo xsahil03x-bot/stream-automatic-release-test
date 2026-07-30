@@ -1,3 +1,7 @@
+## 4.0.0
+
+- T14: fan-out (two and three both depend on one).
+
 ## 3.1.0
 
 - Change in package_two (T10 multi-package skill test).

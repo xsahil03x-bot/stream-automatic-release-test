@@ -1,3 +1,7 @@
+## 4.0.0
+
+- T14: fan-out (two and three both depend on one).
+
 ## 3.1.0
 
 - Added a shiny new feature (T9 skill test).
