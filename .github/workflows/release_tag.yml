@@ -5,52 +5,38 @@ on:
     branches: [main]
 
 concurrency:
+  # false: never cancel a run mid tag-push (would drop a release).
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  create_tag:
-    # Only run this job for commits that indicate a release
-    if: "${{ startsWith(github.event.head_commit.message, 'chore(repo): release') }}"
+  release:
+    # No regex in GH expressions; match the `chore(<scope>): release` prefix.
+    if: "${{ startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release') }}"
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to create and push tags
-
+      contents: write
     steps:
       - name: 📚 Checkout branch
-        uses: actions/checkout@v4
+        # Bot PAT: GITHUB_TOKEN tag pushes don't trigger the publish workflow.
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.BOT_GITHUB_API_TOKEN }}
 
-      - name: 🏷️ Extract Version Tag
-        id: extract_tag
+      - name: 🐦 Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: 📦 Install Tools
+        run: flutter pub global activate melos
+
+      - name: 🏷️ Tag unpublished packages
+        # Tags derive from package state, not the commit message. See release:tag.
         shell: bash
         run: |
           set -euo pipefail
-
-          commit_msg="${{ github.event.head_commit.message }}"
-          echo "📦 Commit message: $commit_msg"
-
-          # Match vX.Y.Z or vX.Y.Z-suffix (case-insensitive)
-          version_regex='[vV][0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.\-]+)?'
-
-          if [[ "$commit_msg" =~ $version_regex ]]; then
-            version="${BASH_REMATCH[0]}"
-            echo "✅ Found version tag: $version"
-            echo "tag=$version" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error ::❌ No SemVer tag found in commit message."
-            echo "::error ::Expected something like: 'chore(repo): release v1.2.3[-beta]'"
-            exit 1
-          fi
-
-      - name: 🚀 Create and Push Tag
-        shell: bash
-        run: |
           git config user.name "Stream SDK Bot"
           git config user.email "60655709+Stream-SDK-Bot@users.noreply.github.com"
-          
-          echo "Creating and pushing tag: ${{ steps.extract_tag.outputs.tag }}"
-          git tag ${{ steps.extract_tag.outputs.tag }}
-          git push origin ${{ steps.extract_tag.outputs.tag }}
+          melos run release:tag

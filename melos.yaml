@@ -11,8 +11,16 @@ command:
 scripts:
   lint:pub:
     run: melos exec -c 1 --no-published --no-private --order-dependents -- "flutter pub publish -n"
-    description: Dry run `pub publish` in all packages.
+    description: Dry run `pub publish` for unpublished packages, in dependency order.
+
+  release:tag:
+    run: |
+      melos exec -c 1 --no-published --no-private --order-dependents -- \
+        "git tag \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION || true"
+      melos exec -c 1 --no-published --no-private --order-dependents -- \
+        "git push origin \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION"
+    description: Tag unpublished packages and push, in dependency order.
 
   release:pub:
     run: melos exec -c 1 --no-published --no-private --order-dependents -- "flutter pub publish -f"
-    description: Publish all packages to pub.dev.
+    description: Publish unpublished packages to pub.dev, in dependency order.

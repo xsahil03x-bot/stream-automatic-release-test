@@ -3,33 +3,76 @@ name: release_publish
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+' # tag-pattern on pub.dev: 'v{{version}}'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*' # tag-pattern on pub.dev: 'v{{version}}'
-  workflow_dispatch: # Allow manual triggering of the workflow
+      - '*-v[0-9]+.[0-9]+.[0-9]+'   # <pkg>-vX.Y.Z
+      - '*-v[0-9]+.[0-9]+.[0-9]+-*' # <pkg>-vX.Y.Z-<pre>
+  workflow_dispatch: # manual re-runs against a tag ref
 
 concurrency:
+  # false: don't let a re-run cancel an in-flight publish of the same tag.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   release:
     permissions:
-      contents: write  # Required to creating release
-      id-token: write # Required for authentication using OIDC
+      contents: write # create the GitHub Release
+      id-token: write # OIDC auth to pub.dev
     runs-on: ubuntu-latest
     steps:
       - name: 📚 Checkout branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.BOT_GITHUB_API_TOKEN }}
 
-      # Set up the Dart SDK and provision the OIDC token used for publishing.
+      - name: 🏷️ Parse package and version from tag
+        id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ref="${GITHUB_REF#refs/tags/}"
+          echo "📦 Tag: $ref"
+
+          # <package>-v<semver>; version is bounded to a semver shape (with an
+          # optional pre-release suffix), not an open-ended capture.
+          if [[ ! "$ref" =~ ^([a-z0-9_]+)-v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error ::Tag '$ref' does not match '<package>-v<semver>'."
+            exit 1
+          fi
+
+          pkg="${BASH_REMATCH[1]}"
+          version="${BASH_REMATCH[2]}"
+
+          pubspec="packages/$pkg/pubspec.yaml"
+          if [[ ! -f "$pubspec" ]]; then
+            echo "::error ::No package found at $pubspec."
+            exit 1
+          fi
+
+          # Guard a stray tag: pubspec version must equal the tag version.
+          pubspec_version="$(grep -E '^version:' "$pubspec" | head -n1 | sed -E 's/^version:[[:space:]]*//')"
+          if [[ "$pubspec_version" != "$version" ]]; then
+            echo "::error ::Tag version ($version) does not match $pubspec version ($pubspec_version)."
+            exit 1
+          fi
+
+          is_prerelease=$([[ "$version" == *-* ]] && echo true || echo false)
+
+          {
+            echo "package=$pkg"
+            echo "version=$version"
+            echo "prerelease=$is_prerelease"
+          } >> "$GITHUB_OUTPUT"
+
       - name: 🎯 Setup Dart
+        # Before flutter-action: this provides the OIDC token for pub.dev.
         uses: dart-lang/setup-dart@v1
 
       - name: 🐦 Install Flutter
         uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
       - name: 📦 Install Tools
         run: flutter pub global activate melos
@@ -38,31 +81,87 @@ jobs:
         run: melos bootstrap --verbose
 
       - name: 🌵 Dry Run
+        # MELOS_PACKAGES scopes lint:pub / release:pub to just the tagged package.
         run: melos run lint:pub
+        env:
+          MELOS_PACKAGES: ${{ steps.parse.outputs.package }}
 
-      - name: 📢 Release to pub.dev
-        run: melos run release:pub
-
-      - name: 🏷️ Extract Version Info
-        id: extract_version
+      - name: ⏳ Wait for in-workspace dependencies
+        # Each package publishes in its own OIDC run, so wait until this
+        # package's in-workspace deps are live before publishing — a dependent
+        # never publishes before its dependency. No-op when there are none.
         shell: bash
+        env:
+          PKG: ${{ steps.parse.outputs.package }}
         run: |
           set -euo pipefail
-          
-          tag_name="${{ github.ref_name }}"
-          echo "📦 Tag: $tag_name"
-          
-          # Check if this is a pre-release (contains hyphen after version)
-          is_prerelease=$([[ $tag_name == *-* ]] && echo true || echo false)
-          echo "ℹ️ Pre-release: $is_prerelease"
-          
-          echo "tag=$tag_name" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+          # $PKG's workspace deps from melos's graph; awk keeps only the JSON
+          # object and drains the stream (no early exit -> no SIGPIPE).
+          graph="$(melos list --graph 2>/dev/null | awk '/^\{/{f=1} f{print} /^\}$/{f=0}')"
+          mapfile -t deps < <(printf '%s' "$graph" | jq -r --arg p "$PKG" '.[$p] // [] | .[]')
+
+          if [[ "${#deps[@]}" -eq 0 ]]; then
+            echo "✅ $PKG has no in-workspace dependencies."
+            exit 0
+          fi
+
+          for dep in "${deps[@]}"; do
+            echo "⏳ Waiting for $dep to be published on pub.dev…"
+            deadline=$((SECONDS + 900)) # 15 minutes
+            # melos's own published-check (same detection as --no-published):
+            # lists $dep only once its current version is live on pub.dev.
+            until melos list --published --scope="$dep" 2>/dev/null | grep -qx "$dep"; do
+              if (( SECONDS >= deadline )); then
+                echo "::error ::Timed out waiting for $dep on pub.dev. Once it is published, re-run this workflow."
+                exit 1
+              fi
+              echo "  …not live yet; retrying in 15s"
+              sleep 15
+            done
+            echo "✅ $dep is published."
+          done
+
+      - name: 📢 Publish to pub.dev
+        run: melos run release:pub
+        env:
+          MELOS_PACKAGES: ${{ steps.parse.outputs.package }}
+
+      - name: 📝 Extract CHANGELOG section
+        id: notes
+        shell: bash
+        env:
+          PKG: ${{ steps.parse.outputs.package }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          changelog="packages/$PKG/CHANGELOG.md"
+          notes_file="$RUNNER_TEMP/release_notes.md"
+
+          # Exact `## <version>` heading match. Not generate_release_notes: it
+          # would list every package's commits since the previous tag.
+          if [[ -f "$changelog" ]]; then
+            awk -v version="$VERSION" '
+              $0 == "## " version { capture = 1; next }
+              capture && /^## / { exit }
+              capture { print }
+            ' "$changelog" > "$notes_file"
+          fi
+
+          # Publish is irreversible; never fail the release on a missing heading.
+          if [[ ! -s "$notes_file" ]]; then
+            echo "See [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/packages/$PKG/CHANGELOG.md)." > "$notes_file"
+          fi
+
+          echo "path=$notes_file" >> "$GITHUB_OUTPUT"
 
       - name: 🚀 Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
-          tag_name: ${{ steps.extract_version.outputs.tag }}
-          prerelease: ${{ steps.extract_version.outputs.prerelease }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.parse.outputs.package }} v${{ steps.parse.outputs.version }}
+          body_path: ${{ steps.notes.outputs.path }}
+          prerelease: ${{ steps.parse.outputs.prerelease }}
+          make_latest: false # independent versioning: no single "latest" release
           token: ${{ secrets.BOT_GITHUB_API_TOKEN }}
