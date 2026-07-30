@@ -1,3 +1,7 @@
+## 2.5.0-beta.1
+
+- T7: pre-release + cache removed (also re-tests idempotency).
+
 ## 2.4.0
 
 - T3: coordinated release; package_two depends on package_one.
