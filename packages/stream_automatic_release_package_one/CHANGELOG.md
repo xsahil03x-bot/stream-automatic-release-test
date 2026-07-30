@@ -1,3 +1,7 @@
+## 3.0.0
+
+- T13: dependency chain three->two->one.
+
 ## 2.5.0-beta.1
 
 - T7: pre-release + cache removed (also re-tests idempotency).

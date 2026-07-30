@@ -1,3 +1,7 @@
+## 3.0.0
+
+- T13: dependency chain three->two->one.
+
 ## 2.4.0
 
 - T3: coordinated release; package_two depends on package_one.
