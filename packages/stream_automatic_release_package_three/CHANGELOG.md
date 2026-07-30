@@ -1,4 +1,4 @@
-## Upcoming
+## 3.1.0
 
 - Change in package_three (T10 multi-package skill test).
 

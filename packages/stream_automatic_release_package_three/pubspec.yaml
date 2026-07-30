@@ -1,7 +1,7 @@
 name: stream_automatic_release_package_three
 description: A third test package for automatic release checks using Melos.
 repository: https://github.com/xsahil03x-bot/stream-automatic-release-test
-version: 3.0.0
+version: 3.1.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
