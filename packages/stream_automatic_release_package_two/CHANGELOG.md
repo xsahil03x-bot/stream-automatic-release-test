@@ -1,3 +1,7 @@
+## 2.3.0
+
+- T2: multi-package independent release test.
+
 ## 2.1.0
 
 - Added support for isNotAwesome

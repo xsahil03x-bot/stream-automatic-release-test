@@ -1,3 +1,7 @@
+## 2.3.0
+
+- T2: multi-package independent release test.
+
 ## 2.2.0
 
 - T1: single-package happy-path release test.
