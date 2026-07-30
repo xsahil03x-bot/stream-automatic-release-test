@@ -1,3 +1,7 @@
+## 2.4.0
+
+- T3: coordinated release; package_two depends on package_one.
+
 ## 2.3.0
 
 - T2: multi-package independent release test.
