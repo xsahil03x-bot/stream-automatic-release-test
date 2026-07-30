@@ -1,4 +1,4 @@
-## Upcoming
+## 3.1.0
 
 - Added a shiny new feature (T9 skill test).
 
