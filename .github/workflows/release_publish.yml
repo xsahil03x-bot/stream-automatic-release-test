@@ -109,7 +109,7 @@ jobs:
 
           for dep in "${deps[@]}"; do
             echo "⏳ Waiting for $dep to be published on pub.dev…"
-            deadline=$((SECONDS + 900)) # 15 minutes
+            deadline=$((SECONDS + 40)) # SHORTENED for T4 test
             # melos's own published-check (same detection as --no-published):
             # lists $dep only once its current version is live on pub.dev.
             until melos list --published --scope="$dep" 2>/dev/null | grep -qx "$dep"; do
