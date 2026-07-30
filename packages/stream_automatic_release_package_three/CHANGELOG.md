@@ -1,3 +1,7 @@
+## Upcoming
+
+- Change in package_three (T10 multi-package skill test).
+
 ## 3.0.0
 
 - T13: dependency chain three->two->one.
