@@ -1,0 +1,14 @@
+name: stream_automatic_release_package_three
+description: A third test package for automatic release checks using Melos.
+repository: https://github.com/xsahil03x-bot/stream-automatic-release-test
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  # workspace deps added per test case
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0
