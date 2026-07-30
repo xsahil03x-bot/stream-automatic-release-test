@@ -1,3 +1,7 @@
+## 2.2.0
+
+- T1: single-package happy-path release test.
+
 ## 2.1.0
 
 - Added support for isNotAwesome
