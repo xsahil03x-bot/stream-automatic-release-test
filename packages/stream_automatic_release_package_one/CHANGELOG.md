@@ -1,3 +1,7 @@
+## 8.0.0
+
+- skip-validation test.
+
 ## 7.0.0
 
 - diamond dependency test.
