@@ -16,8 +16,7 @@ scripts:
   release:tag:
     run: |
       melos exec -c 1 --no-published --no-private --order-dependents -- \
-        "git tag \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION || true"
-      for tag in $(git tag --points-at HEAD); do git push origin "$tag"; done
+        "if git tag \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION 2>/dev/null; then git push origin \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION; fi"
     description: Tag unpublished packages and push, in dependency order.
 
   release:pub:
