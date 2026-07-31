@@ -1,3 +1,7 @@
+## 7.0.0
+
+- diamond dependency test.
+
 ## 6.0.0
 
 - validate melos-native gate (chain).
