@@ -1,3 +1,7 @@
+## 11.0.0
+
+- validate curl-gate.
+
 ## 9.0.0
 
 - validate --skip-validation (no gate) chain.

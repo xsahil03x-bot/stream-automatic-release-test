@@ -1,3 +1,7 @@
+## 11.0.0
+
+- validate curl-gate.
+
 ## 10.0.0 (2026-07-31)
 
 - Verify dated-header extraction + pub.dev footer.
