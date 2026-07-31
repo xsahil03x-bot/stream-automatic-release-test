@@ -1,3 +1,7 @@
+## 10.0.0 (2026-07-31)
+
+- Dated-header changelog extraction test.
+
 ## 9.0.0
 
 - validate --skip-validation (no gate) chain.
