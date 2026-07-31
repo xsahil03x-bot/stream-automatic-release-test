@@ -1,3 +1,7 @@
+## 9.0.0
+
+- validate --skip-validation (no gate) chain.
+
 ## 8.0.0
 
 - skip-validation test.
