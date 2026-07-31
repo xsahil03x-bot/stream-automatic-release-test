@@ -1,3 +1,7 @@
+## 13.0.0
+
+- Dependency-ordered push test (dependent; requires package_two ^13.0.0).
+
 ## 12.0.0+1
 
 - Test build-metadata release + tag_package.sh refactor.

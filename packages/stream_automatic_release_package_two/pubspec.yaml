@@ -1,7 +1,7 @@
 name: stream_automatic_release_package_two
 description: A test package for automatic release check using Melos.
 repository: https://github.com/xsahil03x/stream-automatic-release-test
-version: 12.0.0
+version: 13.0.0
 # repository: https://github.com/my_org/my_repo
 
 environment:

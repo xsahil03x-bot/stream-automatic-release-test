@@ -1,3 +1,7 @@
+## 13.0.0
+
+- Dependency-ordered push test (dependency).
+
 ## 12.0.0
 
 - Validate melos-action tag pattern (stale package_one tag must be ignored).
