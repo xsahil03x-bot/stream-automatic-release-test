@@ -1,3 +1,7 @@
+## 6.0.0
+
+- validate melos-native gate (chain).
+
 ## 5.0.0
 
 - T8 idempotency-guard test.

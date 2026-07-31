@@ -1,13 +1,13 @@
 name: stream_automatic_release_package_three
 description: A third test package for automatic release checks using Melos.
 repository: https://github.com/xsahil03x-bot/stream-automatic-release-test
-version: 5.0.0
+version: 6.0.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  # independent for T8 guard test
+  stream_automatic_release_package_two: ^6.0.0
 
 dev_dependencies:
   lints: ^5.0.0
