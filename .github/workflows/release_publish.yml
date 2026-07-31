@@ -97,24 +97,31 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Wait until every in-workspace dependency of $PKG is on pub.dev.
-          # `melos list --scope=$PKG --include-dependencies --no-published` lists
-          # $PKG plus any of its (transitive) workspace deps whose current version
-          # isn't published yet; drop $PKG itself (it's unpublished by definition
-          # here) — whatever's left are dependencies we must wait for.
-          deadline=$((SECONDS + 900)) # 15 minutes
-          while :; do
-            pending="$(melos list --scope="$PKG" --include-dependencies --no-published 2>/dev/null \
-              | grep -E '^[a-z0-9_]+$' | grep -vxF "$PKG" || true)"
-            [[ -z "$pending" ]] && break
-            if (( SECONDS >= deadline )); then
-              echo "::error ::Timed out waiting for $PKG's dependencies on pub.dev: $pending. Re-run once they're published."
-              exit 1
-            fi
-            echo "  …waiting on: $(echo "$pending" | tr '\n' ' '); retrying in 15s"
-            sleep 15
+          # $PKG's workspace deps from melos's graph; awk keeps only the JSON
+          # object and drains the stream (no early exit -> no SIGPIPE).
+          graph="$(melos list --graph 2>/dev/null | awk '/^\{/{f=1} f{print} /^\}$/{f=0}')"
+          mapfile -t deps < <(printf '%s' "$graph" | jq -r --arg p "$PKG" '.[$p] // [] | .[]')
+
+          if [[ "${#deps[@]}" -eq 0 ]]; then
+            echo "✅ $PKG has no in-workspace dependencies."
+            exit 0
+          fi
+
+          for dep in "${deps[@]}"; do
+            echo "⏳ Waiting for $dep to be published on pub.dev…"
+            deadline=$((SECONDS + 900)) # 15 minutes
+            # Use --published (not --no-published): validated to freshen within a
+            # few polls, whereas --no-published stays stale for many minutes in CI.
+            until melos list --published --scope="$dep" 2>/dev/null | grep -qx "$dep"; do
+              if (( SECONDS >= deadline )); then
+                echo "::error ::Timed out waiting for $dep on pub.dev. Once it is published, re-run this workflow."
+                exit 1
+              fi
+              echo "  …not live yet; retrying in 15s"
+              sleep 15
+            done
+            echo "✅ $dep is published."
           done
-          echo "✅ all of $PKG's in-workspace dependencies are published."
 
       - name: 📢 Publish to pub.dev
         run: melos run release:pub
