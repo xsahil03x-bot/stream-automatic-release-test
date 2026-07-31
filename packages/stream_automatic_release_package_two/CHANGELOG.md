@@ -1,3 +1,7 @@
+## 12.0.0
+
+- Validate melos-action tag pattern (stale package_one tag must be ignored).
+
 ## 11.0.0
 
 - validate curl-gate.
