@@ -1,3 +1,7 @@
+## 12.0.0+1
+
+- Test build-metadata release + tag_package.sh refactor.
+
 ## 11.0.0
 
 - validate curl-gate.
