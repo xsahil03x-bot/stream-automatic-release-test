@@ -1,4 +1,4 @@
-## 14.0.0
+## 15.0.0
 
-- Review-fixes e2e test (dependency).
+- Validate review fixes #2/#4/#5.
 
