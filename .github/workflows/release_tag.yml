@@ -12,9 +12,8 @@ concurrency:
 
 jobs:
   release:
-    # Run on a manual dispatch, or when the commit matches the `chore(<scope>):
-    # release` prefix (no regex in GH expressions). Tags derive from package
-    # state, so a manual run tags whatever is currently unpublished.
+    # Manual dispatch, or a commit whose message starts `chore(<scope>): release`
+    # (no regex in GH expressions). A manual run tags whatever is unpublished.
     if: "${{ github.event_name == 'workflow_dispatch' || (startsWith(github.event.head_commit.message, 'chore(') && contains(github.event.head_commit.message, '): release')) }}"
     runs-on: ubuntu-latest
     permissions:
@@ -36,10 +35,11 @@ jobs:
         run: flutter pub global activate melos
 
       - name: 🏷️ Tag unpublished packages
-        # Tags derive from package state, not the commit message. See release:tag.
+        # Tag every unpublished package (state-derived, not from the commit msg)
+        # and push each in dependency order, one per event. An existing tag (e.g.
+        # a stale one on an old commit) fails `git tag` and is skipped with a warning.
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "Stream SDK Bot"
-          git config user.email "60655709+Stream-SDK-Bot@users.noreply.github.com"
-          melos run release:tag
+          melos exec -c 1 --no-published --no-private --order-dependents -- \
+            "if git tag \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION 2>/dev/null; then git push origin \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION; else echo \"::warning ::Skipped \$MELOS_PACKAGE_NAME-v\$MELOS_PACKAGE_VERSION: tag already exists (stale tag on an old commit?), not pushed.\"; fi"

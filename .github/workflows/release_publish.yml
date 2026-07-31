@@ -21,10 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 📚 Checkout branch
+        # Default GITHUB_TOKEN: this job never pushes to git (the release step
+        # passes its own token), so no bot PAT sits in git config during setup.
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.BOT_GITHUB_API_TOKEN }}
 
       - name: 🏷️ Parse package and version from tag
         id: parse
@@ -44,9 +45,11 @@ jobs:
           pkg="${BASH_REMATCH[1]}"
           version="${BASH_REMATCH[2]}"
 
-          pubspec="packages/$pkg/pubspec.yaml"
-          if [[ ! -f "$pubspec" ]]; then
-            echo "::error ::No package found at $pubspec."
+          # Find the package's pubspec by name — melos isn't installed yet, and a
+          # package's directory may differ from its name.
+          pubspec="$(grep -rlE "^name:[[:space:]]+$pkg\$" --include=pubspec.yaml packages/ 2>/dev/null | head -n1)"
+          if [[ -z "$pubspec" ]]; then
+            echo "::error ::No package named '$pkg' found under packages/."
             exit 1
           fi
 
@@ -83,24 +86,22 @@ jobs:
         run: melos bootstrap --verbose
 
       - name: 🌵 Dry Run
-        # MELOS_PACKAGES scopes lint:pub to just the tagged package.
+        # MELOS_PACKAGES scopes lint:pub to the tagged package.
         run: melos run lint:pub
         env:
           MELOS_PACKAGES: ${{ steps.parse.outputs.package }}
 
       - name: ⏳ Wait for in-workspace dependencies
         # A dependent can reach pub.dev before its dependency is indexed (each
-        # publishes in its own OIDC run), which the server rejects. Wait until
-        # each in-workspace dependency is live — via the per-version endpoint,
-        # fresh in CI unlike the listing `melos --published` reads.
+        # runs separately), which the server rejects. Wait via the per-version
+        # endpoint — fresh in CI, unlike the listing `melos --published` reads.
         shell: bash
         env:
           PKG: ${{ steps.parse.outputs.package }}
         run: |
           set -euo pipefail
 
-          # Dep names from the graph (all in-workspace deps, incl. dev/override);
-          # versions from list --json (dir name may differ). Skip private deps —
+          # Deps from the graph, versions from list --json. Skip private deps —
           # they never publish, so waiting on one would hang until timeout.
           info="$(melos list --json 2>/dev/null)"
           raw="$(melos list --graph 2>/dev/null | awk '/^\{/{f=1} f{print} /^\}$/{f=0}' \
@@ -128,14 +129,14 @@ jobs:
           done
 
       - name: 📢 Publish to pub.dev
-        # One tag = one package, so publish it directly. Idempotent by pub.dev
-        # state, not `melos --no-published` (which lags in CI): skip if the
-        # version is already live, else publish and confirm it landed before the
-        # release is cut.
+        # Idempotent by pub.dev state, not `melos --no-published` (which lags in
+        # CI): skip if the version is already live, else publish and confirm it
+        # landed before the release is cut.
         shell: bash
         env:
           PKG: ${{ steps.parse.outputs.package }}
           VERSION: ${{ steps.parse.outputs.version }}
+          MELOS_PACKAGES: ${{ steps.parse.outputs.package }}
         run: |
           set -euo pipefail
           enc="${VERSION//+/%2B}" # url-encode a build-metadata '+'
@@ -147,11 +148,8 @@ jobs:
             exit 0
           fi
 
-          # Publish just this package. Resolve its location via melos (the
-          # directory name may differ from the package name).
-          pkg_path="$(melos list --json 2>/dev/null | jq -r --arg n "$PKG" '.[] | select(.name==$n) | .location')"
-          echo "📦 Publishing $PKG v$VERSION from $pkg_path…"
-          (cd "$pkg_path" && flutter pub publish --force)
+          echo "📦 Publishing $PKG v$VERSION…"
+          melos run release:pub
 
           # Confirm it actually landed before the release is cut (guards a no-op
           # publish from producing a Release for a version that isn't on pub.dev).
