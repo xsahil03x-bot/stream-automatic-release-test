@@ -88,6 +88,35 @@ jobs:
           MELOS_PACKAGES: ${{ steps.parse.outputs.package }}
 
 
+      - name: ⏳ Wait for in-workspace dependencies
+        # Each package publishes in its own OIDC run, so a dependent can reach
+        # pub.dev before its dependency is indexed. Wait until each in-workspace
+        # dependency's version is live — via the fresh per-version endpoint
+        # (the package listing melos --published reads lags for minutes in CI).
+        shell: bash
+        env:
+          PKG: ${{ steps.parse.outputs.package }}
+        run: |
+          set -euo pipefail
+
+          info="$(melos list --json 2>/dev/null)"
+          deps="$(melos list --graph 2>/dev/null | awk '/^\{/{f=1} f{print} /^\}$/{f=0}' \
+            | jq -r --arg p "$PKG" '.[$p] // [] | .[]')"
+
+          [[ -z "$deps" ]] && { echo "✅ $PKG has no in-workspace dependencies."; exit 0; }
+
+          for dep in $deps; do
+            want="$(printf '%s' "$info" | jq -r --arg n "$dep" '.[] | select(.name==$n) | .version')"
+            echo "⏳ Waiting for $dep v$want on pub.dev…"
+            deadline=$((SECONDS + 900)) # 15 minutes
+            until curl -sfL -o /dev/null "https://pub.dev/api/packages/$dep/versions/$want"; do
+              (( SECONDS < deadline )) || { echo "::error ::Timed out waiting for $dep v$want. Re-run once it's published."; exit 1; }
+              echo "  …not live yet; retrying in 15s"
+              sleep 15
+            done
+            echo "✅ $dep v$want is live."
+          done
+
       - name: 📢 Publish to pub.dev
         run: melos run release:pub
         env:
