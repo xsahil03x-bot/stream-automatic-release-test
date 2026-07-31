@@ -1,3 +1,7 @@
+## 5.0.0
+
+- T8 idempotency-guard test.
+
 ## 4.0.0
 
 - T14: fan-out (two and three both depend on one).
